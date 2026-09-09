@@ -438,7 +438,7 @@
     chaser: {
       name:'クルーズチェイサー', hp:300000, color:0x4b86d8,
       skills:[
-        {name:'スピンクラッシャー', lockKey:'spinCrusher', type:'cone', range:5, angle:90, cast:0, cd:3, ep:250, damage:{player:5000,object:5000,automaton:5000}, desc:'前方5mの扇範囲。対人/オブジェクト/マトン 5,000。発動時に設定値ぶん硬直（空中では慣性移動を維持）。'},
+        {name:'スピンクラッシャー', lockKey:'spinCrusher', type:'cone', range:5, angle:90, cast:0, cd:3, ep:250, damage:{player:5000,object:5000,automaton:5000,robot:50000}, desc:'前方5mの扇範囲。対ロボ50,000、対人/オブジェクト/マトン5,000。発動時に設定値ぶん硬直（空中では慣性移動を維持）。'},
         {name:'レーザーエックススウォード', lockKey:'laserX', type:'cone', range:15, angle:90, cast:1.5, sfxLeadAdjustable:true, postCastFx:false, cd:10, ep:1000, damage:{player:50000,object:5000,automaton:5000}, desc:'1.5秒詠唱。前方15mの90°扇範囲。対人50,000、オブジェクト/マトン5,000。'},
         {name:'照準', type:'ground', radius:10, maxRange:50, cast:1.5, telegraphDuration:1.0, cd:5, ep:500, damage:{player:30000,object:3000,automaton:3000}, desc:'1.5秒詠唱。詠唱完了直後に半径10mのAoEを1秒表示し、消えた瞬間に攻撃判定。50m以内。対人30,000、オブジェクト/マトン3,000。'},
         {name:'青燐水補充', type:'refill', cast:0, cd:30, ce:25, desc:'CE25を消費してEPを5,000回復（上限10,000として練習用に実装）。'}
