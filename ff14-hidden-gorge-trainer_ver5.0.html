@@ -2255,7 +2255,7 @@
 
   function startSkill(skill,index,targetPoint){
     const origin=robot.position.clone(); origin.y=currentGroundHeight(); const facing=robotState.yaw;
-    if(skill.type==='refill'){ pay(skill); setCooldown(index,skill.cd); playSkillSfx(robotState.type,index); deferJudgement(()=>{if(robotState.hp>0){robotState.ep=Math.min(MAX_EP,robotState.ep+5000); updateStats(); showToast('EP +5,000');}}); return; }
+    if(skill.type==='refill'){ pay(skill); setCooldown(index,skill.cd); playSkillSfx(robotState.type,index); robotState.ep=Math.min(MAX_EP,robotState.ep+5000); updateStats(); showToast('EP +5,000'); return; }
     if(skill.cast>0){
       if(isAirborne()){showToast('ジャンプ中は詠唱スキルを発動できません');return;}
       removePreview();
@@ -2549,6 +2549,7 @@
     a.addEventListener('error',()=>markAudioMissing(path,a.error),{once:true});
     a.play().catch(err=>{if(!loggedAudioFailures.has(path)){loggedAudioFailures.add(path);console.info(`[audio optional] play failed: ${path}`,err);}});
   }
+  const SKILL_AUDIO_FILES=["audio/chaser/1-2.wav","audio/chaser/1.mp3","audio/chaser/2-1.wav","audio/chaser/2-2.wav","audio/chaser/2.mp3","audio/chaser/3.mp3","audio/common/gtdecide.wav","audio/common/refill.mp3","audio/justice/1-1.wav","audio/justice/1.mp3","audio/justice/2.mp3","audio/justice/3.mp3","audio/justice/4.mp3","audio/oppressor/1.mp3","audio/oppressor/2.mp3","audio/oppressor/3.mp3"];
   const skillSfxResolvedPath=new Map();
   const skillSfxResolvePromise=new Map();
   function skillSfxKey(type,index){return `${type}:${index}`;}
@@ -2581,22 +2582,20 @@
     });
   }
   async function resolveByProbe(type,actionNo){
-    // version 99..1を優先し、最後に無印(version 0)を確認。同versionではmp3>wav>ogg>m4a。
-    // 静的HTML/file://でも最大versionを選べるよう候補を並列確認し、優先順で最初に存在するものを採用する。
-    const candidates=[];
-    for(let ver=SFX_VERSION_SCAN_MAX;ver>=0;ver--) for(const ext of SFX_AUDIO_EXTENSIONS){
-      candidates.push(`${skillSfxBaseDir(type)}${actionNo}${ver?'-'+ver:''}.${ext}`);
-    }
-    const exists=await Promise.all(candidates.map(path=>probeAudioCandidate(path)));
-    const hit=candidates.find((_,i)=>exists[i]);
-    return hit||LEGACY_SKILL_SFX_FALLBACK[type]?.[actionNo]||null;
+    // Only unknown, unindexed actions fall back to four plain filenames.
+    const candidates=SFX_AUDIO_EXTENSIONS.map(ext=>`${skillSfxBaseDir(type)}${actionNo}.${ext}`);
+    const exists=await Promise.all(candidates.map(path=>probeAudioCandidate(path,4000)));
+    return candidates.find((_,i)=>exists[i])||LEGACY_SKILL_SFX_FALLBACK[type]?.[actionNo]||null;
   }
   async function resolveSkillSfxPath(type,index){
     const key=skillSfxKey(type,index); if(skillSfxResolvedPath.has(key))return skillSfxResolvedPath.get(key);
     if(skillSfxResolvePromise.has(key))return skillSfxResolvePromise.get(key);
     const actionNo=index+1;
     const task=(async()=>{
-      let path=await resolveFromDirectoryListing(type,actionNo);
+      const dir=skillSfxBaseDir(type);
+      const indexed=SKILL_AUDIO_FILES.filter(path=>path.startsWith(dir)).map(path=>({path,...parseVersionedActionFile(path,actionNo)})).filter(item=>Number.isFinite(item.version));
+      indexed.sort((a,b)=>b.version-a.version||SFX_AUDIO_EXTENSIONS.indexOf(a.ext)-SFX_AUDIO_EXTENSIONS.indexOf(b.ext));
+      let path=indexed[0]?.path||LEGACY_SKILL_SFX_FALLBACK[type]?.[actionNo]||await resolveFromDirectoryListing(type,actionNo);
       if(path){try{path=new URL(path,document.baseURI).href;}catch(_){}}
       if(!path)path=await resolveByProbe(type,actionNo);
       skillSfxResolvedPath.set(key,path||null); skillSfxResolvePromise.delete(key); return path||null;
