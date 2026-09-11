@@ -569,7 +569,7 @@
   const DEFAULT_CAMERA_FOCUS_Y={chaser:7.30,justice:9.27,oppressor:7.1};
   // SEタイミング補正: 負値=基準時刻より先行、正値=遅延。従来の実効タイミングを初期値として維持。
   const DEFAULT_SKILL_SFX_TIMING={chaser:[0,-.5,0,0],justice:[.6,-.5,-.5,0],oppressor:[0,0,0]};
-  const DEFAULT_SETTINGS={settingsSchemaVersion:SETTINGS_SCHEMA_VERSION,movementModelVersion:FFXIV_MOVEMENT_MODEL_VERSION, slidecastWindow:0, showInstantRanges:true, gtKeyConfirm:false, clampGroundTargetRange:false, stunEnabled:true, koEnabled:true, cameraTilt:100, tiltRevision:2, cameraFovRad:0.78, cameraRevision:2, emulateLatency:true, latencySeconds:.6, cameraZoomLimit:20, cameraFocusY:{...DEFAULT_CAMERA_FOCUS_Y}, gtLosSourceHeight:2.0, targetCalibrationRevision:1, bgmEnabled:true, sfxEnabled:true, bgmVolume:.025, sfxVolume:.025, skillSfxTiming:JSON.parse(JSON.stringify(DEFAULT_SKILL_SFX_TIMING)), skillActionLock:{...DEFAULT_SKILL_ACTION_LOCK}, moveSpeed:{chaser:12.0,justice:8.0,oppressor:5.0}, mapType:'gorge', dummyMotion:{mode:'regular',speed:7.8,running:false}};
+  const DEFAULT_SETTINGS={settingsSchemaVersion:SETTINGS_SCHEMA_VERSION,movementModelVersion:FFXIV_MOVEMENT_MODEL_VERSION, slidecastWindow:0, showInstantRanges:true, gtKeyConfirm:false, clampGroundTargetRange:false, stunEnabled:true, koEnabled:true, cameraTilt:100, tiltRevision:2, cameraFovRad:0.78, cameraRevision:2, emulateLatency:true, latencySeconds:.6, cameraZoomLimit:20, cameraFocusY:{...DEFAULT_CAMERA_FOCUS_Y}, gtLosSourceHeight:2.0, targetCalibrationRevision:1, simulationFriendlyStructures:false, simulationCoreDamage:'normal', bgmEnabled:true, sfxEnabled:true, bgmVolume:.025, sfxVolume:.025, skillSfxTiming:JSON.parse(JSON.stringify(DEFAULT_SKILL_SFX_TIMING)), skillActionLock:{...DEFAULT_SKILL_ACTION_LOCK}, moveSpeed:{chaser:12.0,justice:8.0,oppressor:5.0}, mapType:'gorge', dummyMotion:{mode:'regular',speed:7.8,running:false}};
   Object.assign(DEFAULT_SETTINGS,{nearbyNpcLabels:true,oppressorLimit:{home:1,enemy:1},chaserLimit:{home:2,enemy:2},justiceLimit:{home:-1,enemy:-1},vehicleTotalLimit:{home:3,enemy:3}});
   const GAME={mode:'menu',phase:'menu',screen:'menu',roster:Array.from({length:12},(_,i)=>['warrior','summoner','dragoon'][i%3]),elapsed:0,homeSpawn:0,enemySpawn:0,awaitMount:false};
   let centralBoundary=null;
@@ -688,6 +688,10 @@
     if(settings.gtLosSourceHeight===3)settings.gtLosSourceHeight=2;
   }}catch(_){}
   function groundSkillRange(skill,type=robotState.type){return skill.maxRange+(ROBOT_TARGET_RADIUS_BY_TYPE[type]||0);}
+  try{const saved=JSON.parse(localStorage.getItem('hgTrainerSettings')||'null');if(saved){
+    if(typeof saved.simulationFriendlyStructures==='boolean')settings.simulationFriendlyStructures=saved.simulationFriendlyStructures;
+    if(['normal','half','full'].includes(saved.simulationCoreDamage))settings.simulationCoreDamage=saved.simulationCoreDamage;
+  }}catch(_){}
   function normalizeMoveSpeeds(){
     const gap=.1;
     let o=THREE.MathUtils.clamp(Number(settings.moveSpeed.oppressor)||5.0,2,14.8);
@@ -1639,7 +1643,7 @@
     }
     root.traverse(o=>{if(o.geometry)o.geometry.userData.shared=true;});modelPrototypes.set(cacheKey,root);return root;
   }
-  function makeRobotModel(type,team='home'){const model=makeRobotPrototype(type,team).clone(true);model.scale.set(ROBOT_VISUAL_SCALE,ROBOT_VISUAL_SCALE*2/3*4/5,ROBOT_VISUAL_SCALE);return model;}
+  function makeRobotModel(type,team='home'){const model=makeRobotPrototype(type,team).clone(true);const planarScale=type==='oppressor'?.8:1;model.scale.set(ROBOT_VISUAL_SCALE*planarScale,ROBOT_VISUAL_SCALE*2/3*4/5,ROBOT_VISUAL_SCALE*planarScale);return model;}
 
   function makeTower(team='enemy',core=false){
     const key='structure-v4-'+team+'-'+core;if(modelPrototypes.has(key))return modelPrototypes.get(key).clone(true);
@@ -1713,7 +1717,7 @@
   function buildRobotVisual(type){
     if(robotVisual){robot.remove(robotVisual);disposeV2(robotVisual);}
     robotVisual=makeRobotModel(type,'home');robot.add(robotVisual);
-    const ring=targetCircle(ROBOT_TARGET_RADIUS_BY_TYPE[type],'home');ring.scale.setScalar(1/ROBOT_VISUAL_SCALE);ring.position.y/=ROBOT_VISUAL_SCALE*2/3*4/5;robotVisual.add(ring);
+    const ring=targetCircle(ROBOT_TARGET_RADIUS_BY_TYPE[type],'home');ring.scale.setScalar(1/(ROBOT_VISUAL_SCALE*(type==='oppressor'?.8:1)));ring.position.y/=ROBOT_VISUAL_SCALE*2/3*4/5;robotVisual.add(ring);
   }
   function refreshTargetCircle(d){
     const ring=d.root.children.find(child=>child.geometry?.type==='RingGeometry');
@@ -2328,12 +2332,12 @@
   function applySkillJudgement(state){
     const {skill,targetPoint,origin,facing}=state;
     for(const d of dummies){
-      if(!d.alive||(GAME.mode!=='sandbox'&&d.team===(state.sourceTeam||'home')))continue;
+      if(!d.alive||(GAME.mode!=='sandbox'&&d.team===(state.sourceTeam||'home')&&!simulationStructureAttack(d,state.sourceTeam||'home',state.source||gamePc())))continue;
       const hitInfo=isHit(skill,d,state); if(!hitInfo.hit)continue;
       if(!impactLosClear(skill,state,d)){spawnBlocked(d);continue;}
       let dmg=skill.damage?.[d.type] ?? (d.type==='robot'?skill.damage?.player:0) ?? 0;
       if(skill.falloff){ const dist=hitInfo.falloffDistance ?? hitInfo.distance,inner=skill.radius,outer=skill.falloffRadius; const mult=dist<=inner?1:(dist>=outer?0:(outer-dist)/(outer-inner)); dmg=Math.round(dmg*mult); }
-      const damageResult=dmg>0?damageDummy(d,dmg,false,state.sourceTeam||'home',state.source||(GAME.mode==='game'?gamePc():null)):'hit';
+      const damageResult=dmg>0?damageDummy(d,dmg,false,state.sourceTeam||'home',state.source||(['simulation','game'].includes(GAME.mode)?gamePc():null)):'hit';
       if(damageResult==='reset')continue;
       if(skill.stun && settings.stunEnabled && d.type==='player' && d.alive && !(d.resilienceUntil>nowSec())){ d.statusUntil=nowSec()+skill.stun; d.statusText=`STUN ${skill.stun}s`; d.motionNextTurn=Math.max(d.motionNextTurn||0,d.statusUntil); }
       if(skill.burn && d.type==='player' && d.alive && !(d.resilienceUntil>nowSec())){ d.burn={ticks:4,next:nowSec()+3,sourceTeam:state.sourceTeam||'home',source:state.source||null}; d.statusText='火傷'; }
@@ -2480,7 +2484,14 @@
     if(d.npc&&amount>0){d.lastDamageAt=laneBattle.time;d.ninjaCast=null;npcCancelElixir(d);cancelTankCast(d);
       if(d.lightUntil>laneBattle.time){amount=Math.round(amount*.75);const absorbed=Math.min(d.lightBarrier||0,amount);d.lightBarrier-=absorbed;amount-=absorbed;}else d.lightBarrier=0;
     }
-    if(d.battleStructure && d.core){const towers=dummies.filter(t=>t.battleStructure&&t.team===d.team&&!t.core&&t.alive).length;if(towers>=2)return 'shield';if(towers===1)amount=Math.round(amount*.5);}
+    if(d.battleStructure && d.core){
+      const mode=simulationStructureAttack(d,sourceTeam,source)?settings.simulationCoreDamage:'normal';
+      if(mode==='half')amount=Math.round(amount*.5);
+      else if(mode!=='full'){
+        const towers=dummies.filter(t=>t.battleStructure&&t.team===d.team&&!t.core&&t.alive).length;
+        if(towers>=2)return 'shield';if(towers===1)amount=Math.round(amount*.5);
+      }
+    }
     recordMatonCE(d,amount,sourceTeam,source);
     d.hp=Math.max(0,d.hp-amount); spawnDamage(d,amount,isDot);
     if(d.hp<=0){awardMatonCE(d);
@@ -2686,6 +2697,7 @@
   }
 
   function updateSettingsUI(){
+    updateSimulationCombatUI();
     $('#cameraTiltSlider').value=settings.cameraTilt; setNumberBox('cameraTiltOut',settings.cameraTilt,0);
     $('#cameraFovSlider').value=settings.cameraFovRad; setNumberBox('cameraFovOut',settings.cameraFovRad,3);
     for(const [type,id] of [['chaser','Chaser'],['justice','Justice'],['oppressor','Oppressor']]){ const v=settings.cameraFocusY[type]; $('#cameraFocus'+id).value=v; setNumberBox('cameraFocus'+id+'Out',v,2); }
@@ -4502,7 +4514,7 @@
   const GAME_JOBS={ninja:'忍者',warrior:'戦士',summoner:'召喚士',dragoon:'竜騎士'};
   const EASY_ENEMIES=[...Array(4).fill('warrior'),...Array(4).fill('summoner'),...Array(5).fill('dragoon')];
 
-  function gameScreen(screen){GAME.screen=screen;document.body.classList.toggle('mountMap',screen==='mount');if(screen==='mount'){miniMap.open=true;$('#miniMapPanel').hidden=false;$('#miniMapToggle').setAttribute('aria-expanded','true');miniMap.last=-Infinity;}$('#modeScreen').hidden=!screen;$('#modeScreen').setAttribute('aria-modal',String(screen!=='mount'));if(screen==='mount')$('#pcOrders').open=true;for(const name of ['menu','difficulty','roster','mount','result'])$('#screen-'+name).hidden=name!==screen;for(const k in keys)keys[k]=false;planarVelocity.set(0,0,0);}
+  function gameScreen(screen){GAME.screen=screen;updateSimulationCombatUI();document.body.classList.toggle('mountMap',screen==='mount');if(screen==='mount'){miniMap.open=true;$('#miniMapPanel').hidden=false;$('#miniMapToggle').setAttribute('aria-expanded','true');miniMap.last=-Infinity;}$('#modeScreen').hidden=!screen;$('#modeScreen').setAttribute('aria-modal',String(screen!=='mount'));if(screen==='mount')$('#pcOrders').open=true;for(const name of ['menu','difficulty','roster','mount','result'])$('#screen-'+name).hidden=name!==screen;for(const k in keys)keys[k]=false;planarVelocity.set(0,0,0);}
   function renderGameRoster(){
     $('#gameRoster').innerHTML=GAME.roster.map((job,i)=>`<label class="rosterSlot"><span>${String(i+1).padStart(2,'0')}</span><select aria-label="味方NPC ${i+1}人目" id="gameJob${i}">${Object.entries(GAME_JOBS).map(([key,name])=>`<option value="${key}" ${job===key?'selected':''}>${name}</option>`).join('')}</select></label>`).join('');
     for(let i=0;i<12;i++)$('#gameJob'+i).onchange=e=>{GAME.roster[i]=e.target.value;renderRosterCount();};renderRosterCount();
@@ -4768,6 +4780,16 @@
     for(let i=0;i<delayedJudgements.length;){const event=delayedJudgements[i];if(now+1e-8>=event.at){delayedJudgements.splice(i,1);event.apply();}else i++;}
   }
   function cameraZoomLimit(){return CAMERA_ZOOM_MAX;}
+  function simulationStructureAttack(d,sourceTeam,source){
+    return GAME.mode==='simulation'&&settings.simulationFriendlyStructures&&sourceTeam==='home'&&source?.pc&&d.battleStructure;
+  }
+  function updateSimulationCombatUI(){
+    const section=$('#simulationCombatSettings');if(!section)return;
+    section.hidden=GAME.mode!=='simulation';
+    $('#simulationFriendlyStructures').checked=settings.simulationFriendlyStructures;
+    $('#simulationCoreDamage').value=settings.simulationCoreDamage;
+    $('#simulationCoreDamage').disabled=!settings.simulationFriendlyStructures;
+  }
   function homeRespawnPosition(){
     const p=currentMapType==='gorge'?laneBattle.routes.North?.points[0]?.clone():new THREE.Vector3(0,0,-70);
     const spawn=p||new THREE.Vector3(MAP.westLaunch.x,0,MAP.westLaunch.z);
@@ -4777,6 +4799,7 @@
     $('#emulateLatency').checked=settings.emulateLatency;
     $('#latencySeconds').value=settings.latencySeconds;$('#latencySecondsOut').value=settings.latencySeconds.toFixed(2)+'秒';
     $('#cameraZoomLimit').value=settings.cameraZoomLimit;$('#cameraZoomLimitOut').value=settings.cameraZoomLimit.toFixed(1)+'m';
+    updateSimulationCombatUI();
   }
   function organizeSimulatorSettings(){
     const panel=$('#leftPanel'),old=$('#settingsDetails'),grid=old.querySelector('.settingsGrid');
@@ -4797,6 +4820,8 @@
     battlefield.innerHTML='<summary>戦場の設定</summary>';
     for(const node of [...panel.children])if(!node.matches('h1,.subtitle'))(node===old?advanced:battlefield).append(node);
     battlefield.querySelector('#battleSettings').open=false;
+    battlefield.querySelector('summary').insertAdjacentHTML('afterend','<div id="simulationCombatSettings" hidden><div class="sectionTitle">シミュレーションの建築物ダメージ</div><label class="settingToggle"><input id="simulationFriendlyStructures" type="checkbox"> 自身のロボで味方コア・タワーにダメージを与える</label><div class="settingRow"><span>自身のロボのコアダメージ補正（両軍）</span><select id="simulationCoreDamage"><option value="normal">折らないとダメ</option><option value="half">半減ダメージ</option><option value="full">フルダメージ</option></select></div></div>');
+    grid.prepend(fields.querySelector('#slidecastSlider').closest('.settingRow'));
     grid.querySelector('#cameraFovSlider').closest('.settingRow').insertAdjacentHTML('beforebegin','<div class="settingRow"><span>カメラの引き上限（固定）</span><input id="cameraZoomLimit" type="range" min="20" max="20" step="0.75" disabled><output id="cameraZoomLimitOut"></output></div>');
     const locks=[...grid.children].find(e=>e.classList.contains('sectionTitle')&&e.textContent==='発動後硬直（秒）');
     locks.insertAdjacentHTML('beforebegin','<div class="sectionTitle">スキル判定の遅延</div><div class="settingRow"><span>遅延を再現時の遅延</span><input id="latencySeconds" type="range" min="0" max="1" step="0.01"><output id="latencySecondsOut"></output></div>');
@@ -4804,6 +4829,8 @@
     old.querySelector('summary').textContent='詳細パラメーター';old.open=true;
     panel.append(battlefield,general,advanced);panel.classList.remove('collapsed');
     $('#emulateLatency').onchange=e=>{settings.emulateLatency=e.target.checked;saveSettings();};
+    $('#simulationFriendlyStructures').onchange=e=>{settings.simulationFriendlyStructures=e.target.checked;saveSettings();updateSimulationCombatUI();};
+    $('#simulationCoreDamage').onchange=e=>{settings.simulationCoreDamage=e.target.value;saveSettings();updateSimulationCombatUI();};
     $('#latencySeconds').oninput=e=>{settings.latencySeconds=Number(e.target.value);saveSettings();updateRevisionSettingsUI();};
     $('#cameraZoomLimit').oninput=()=>{settings.cameraZoomLimit=cameraZoomLimit();cameraDist=Math.min(cameraDist,cameraZoomLimit());saveSettings();updateRevisionSettingsUI();};
     updateRevisionSettingsUI();
