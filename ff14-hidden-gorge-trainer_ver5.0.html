@@ -274,7 +274,7 @@
         <div class="settingRow"><span>ジャスティス基準高さ</span><input id="cameraFocusJustice" type="range" min="0" max="20" step="0.05"><input id="cameraFocusJusticeOut" class="numberBox" type="number"></div>
         <div class="settingRow"><span>オプレッサー基準高さ</span><input id="cameraFocusOppressor" type="range" min="0" max="20" step="0.05"><input id="cameraFocusOppressorOut" class="numberBox" type="number"></div>
         <div class="settingRow"><span>GT LOS Ray始点高さ</span><input id="gtLosSourceHeight" type="range" min="0" max="20" step="0.05"><input id="gtLosSourceHeightOut" class="numberBox" type="number"></div>
-        <div class="miniNote">各機体のLookAt基準高さを足元から0.00〜20.00mで独立調整します。既定値はチェイサー13.00m / ジャスティス15.00m / オプレッサー13.00m。Pitchは常に-85°〜+45°、初期-20°、Zoomは1.5m〜設定上限（開始時は上限まで引く。上限の既定値20.0m）。TiltCameraは0〜100で、PitchやCamera Positionを変更せず射影中心の上下補正として後段適用します。100が以前の80、0が以前の-20に相当します。1段階の補正量は変更しません。FOVは0.69〜0.78rad（初期0.78rad）。GT LOS Ray始点高さはGT設置可否の視線判定用で、カメラとは独立です。</div>
+        <div class="miniNote">各機体のLookAt基準高さを足元から0.00〜20.00mで独立調整します。既定値はチェイサー7.30m / ジャスティス9.27m / オプレッサー7.10m。Pitchは常に-85°〜+45°、初期-20°、Distanceは1.5〜20.0m（初期20.0m）、通常ズームは0.75m刻み。Pivotはプレイヤー座標＋CameraOffset。位置はYaw・DirV・Distanceのみで決定します。TiltCameraは0〜100で、視線だけに-0.08＋0.0029×Tilt radを加算し、最終Pitchを-85°〜+45°に制限します。近距離特殊補正は適用しません。FOVは0.69〜0.78rad（初期0.78rad、最大引きでは0.78rad固定）。GT LOS Ray始点高さはGT設置可否の視線判定用で、カメラとは独立です。</div>
         <div class="sectionTitle">操作・発動</div>
         <div class="settingRow"><span>滑り打ち（固定）</span><input id="slidecastSlider" type="range" min="0" max="0" step="0.05" disabled><input id="slidecastOut" class="numberBox" type="number" disabled></div>
         <label class="settingToggle"><input id="instantRangeToggle" type="checkbox"> スピン / ロケパン / 蒸気噴射の範囲を表示</label>
@@ -399,24 +399,23 @@
   const MAX_EP = 10000;
   const MAX_CE = 100;
   // 攻撃の被弾判定に使うターゲットサークル。物理衝突カプセルとは完全に独立。
-  const ROBOT_SELF_TARGET_RADIUS = 4.8;
-  const ROBOT_TARGET_RADIUS_BY_TYPE = {chaser:4.8,justice:4.8,oppressor:4.8};
+  const ROBOT_TARGET_RADIUS_BY_TYPE = {chaser:5,justice:5.4,oppressor:4.5};
   // 見た目は初期版より大きく表示するが、ターゲットサークルとは独立して扱う。
   const ROBOT_VISUAL_SCALE = 2.0;
   const DUMMY_SPECS = {
     tower:{ id:'tower', name:'タワー', type:'object', maxHp:8000000, radius:3.0 },
-    player:{ id:'player', name:'人（プレイヤー）', type:'player', maxHp:100000, radius:1.1 },
-    melee:{ id:'melee', name:'近接マトン', type:'automaton', maxHp:60000, radius:1.25 },
-    ranged:{ id:'ranged', name:'遠隔マトン', type:'automaton', maxHp:80000, radius:1.25 },
+    player:{ id:'player', name:'人（プレイヤー）', type:'player', maxHp:100000, radius:0.5 },
+    melee:{ id:'melee', name:'近接マトン', type:'automaton', maxHp:60000, radius:1 },
+    ranged:{ id:'ranged', name:'遠隔マトン', type:'automaton', maxHp:80000, radius:1 },
     robotChaser:{ id:'robot_chaser', name:'敵クルーズチェイサー', type:'robot', robotType:'chaser', maxHp:300000, radius:ROBOT_TARGET_RADIUS_BY_TYPE.chaser },
     robotJustice:{ id:'robot_justice', name:'敵ブルートジャスティス', type:'robot', robotType:'justice', maxHp:450000, radius:ROBOT_TARGET_RADIUS_BY_TYPE.justice },
     robotOppressor:{ id:'robot_oppressor', name:'敵オプレッサー', type:'robot', robotType:'oppressor', maxHp:600000, radius:ROBOT_TARGET_RADIUS_BY_TYPE.oppressor }
   };
   // 構造物は「本体/通常判定」と「画面上のターゲットサークル/GT着弾判定」を分離する。
-  // 本体ポリゴンと通常（非GT）判定の最外周: タワー3.63m / コア9.09m。
-  const STRUCTURE_PHYSICAL_RADIUS={tower:3.63,core:9.09};
-  // ターゲットサークル表示とGT着弾判定だけ、本体外周から1.0m外側まで許容する。
-  const STRUCTURE_TARGET_CIRCLE_RADIUS={tower:4.63,core:10.09};
+  // 本体ポリゴンと通常（非GT）判定の最外周: タワー3.5m / コア9m。
+  const STRUCTURE_PHYSICAL_RADIUS={tower:3.5,core:9};
+  // ターゲットサークル表示・GT着弾・距離減衰: タワー4.5m / コア10m。
+  const STRUCTURE_TARGET_CIRCLE_RADIUS={tower:4.5,core:10};
   const STRUCTURE_GT_HIT_RADIUS=STRUCTURE_TARGET_CIRCLE_RADIUS;
   const FLAT_ROOM_HALF = 260;
   const FLAT_TRAINING_HALF = 78;
@@ -457,7 +456,7 @@
       name:'オプレッサー', hp:600000, color:0x8775c9,
       skills:[
         {name:'蒸気噴射', lockKey:'steam', type:'radial', radius:10, cast:0, cd:5, ep:500, damage:{player:10000,object:1000,automaton:1000}, knockback:15, steamHumanOnly:true, desc:'予告なし。自身中心10m。対人10,000、オブジェクト/マトン1,000。人ダミーのみ15mノックバック。発動時に設定値ぶん硬直（空中では慣性移動を維持）。'},
-        {name:'超大型ミサイル', lockKey:'missile', type:'ground', radius:10, falloffRadius:30, falloffTargetInset:1, maxRange:75, cast:2.5, warningDelay:0, delayedImpact:5.0, cd:15, ep:2000, damage:{player:20000,object:1000000,automaton:20000,robot:20000}, falloff:true, desc:'詠唱2.5秒。詠唱完了直後にAoEエフェクト出現し、5.0秒後に着弾。75m以内。命中は実ターゲットサークルで判定。減衰距離だけ実サークルより1m内側の仮想サークルから測り、0〜10mは最大威力、10〜30mは線形減衰、30mで0。'},
+        {name:'超大型ミサイル', lockKey:'missile', type:'ground', radius:10, falloffRadius:30, maxRange:75, cast:2.5, warningDelay:0, delayedImpact:5.0, cd:15, ep:2000, damage:{player:20000,object:1000000,automaton:20000,robot:20000}, falloff:true, desc:'詠唱2.5秒。詠唱完了直後にAoEエフェクト出現し、5.0秒後に着弾。75m以内。命中は実ターゲットサークルで判定。減衰距離も実ターゲットサークルの外周から測り、0〜10mは最大威力、10〜30mは線形減衰、30mで0。'},
         {name:'青燐水補充', type:'refill', cast:0, cd:30, ce:25, desc:'CE25を消費してEPを5,000回復（上限10,000として練習用に実装）。'}
       ]
     }
@@ -567,10 +566,10 @@
   const DEFAULT_SKILL_ACTION_LOCK={megaBeam:.3,rocketPunch:1.0,flamethrower:.3,missile:.3,steam:1.2,spinCrusher:.7,laserX:.3};
   const OLD_DEFAULT_CAMERA_FOCUS_Y={chaser:2.8,justice:3.6,oppressor:3.4};
   const PREV_DEFAULT_CAMERA_FOCUS_Y={chaser:10.0,justice:10.0,oppressor:10.0};
-  const DEFAULT_CAMERA_FOCUS_Y={chaser:13.0,justice:15.0,oppressor:13.0};
+  const DEFAULT_CAMERA_FOCUS_Y={chaser:7.30,justice:9.27,oppressor:7.1};
   // SEタイミング補正: 負値=基準時刻より先行、正値=遅延。従来の実効タイミングを初期値として維持。
   const DEFAULT_SKILL_SFX_TIMING={chaser:[0,-.5,0,0],justice:[.6,-.5,-.5,0],oppressor:[0,0,0]};
-  const DEFAULT_SETTINGS={settingsSchemaVersion:SETTINGS_SCHEMA_VERSION,movementModelVersion:FFXIV_MOVEMENT_MODEL_VERSION, slidecastWindow:0, showInstantRanges:true, gtKeyConfirm:false, clampGroundTargetRange:false, stunEnabled:true, koEnabled:true, cameraTilt:100, tiltRevision:1, cameraFovRad:0.78, cameraRevision:2, emulateLatency:true, latencySeconds:.6, cameraZoomLimit:20, cameraFocusY:{...DEFAULT_CAMERA_FOCUS_Y}, gtLosSourceHeight:3.0, bgmEnabled:true, sfxEnabled:true, bgmVolume:.025, sfxVolume:.025, skillSfxTiming:JSON.parse(JSON.stringify(DEFAULT_SKILL_SFX_TIMING)), skillActionLock:{...DEFAULT_SKILL_ACTION_LOCK}, moveSpeed:{chaser:12.0,justice:8.0,oppressor:5.0}, mapType:'gorge', dummyMotion:{mode:'regular',speed:7.8,running:false}};
+  const DEFAULT_SETTINGS={settingsSchemaVersion:SETTINGS_SCHEMA_VERSION,movementModelVersion:FFXIV_MOVEMENT_MODEL_VERSION, slidecastWindow:0, showInstantRanges:true, gtKeyConfirm:false, clampGroundTargetRange:false, stunEnabled:true, koEnabled:true, cameraTilt:100, tiltRevision:2, cameraFovRad:0.78, cameraRevision:2, emulateLatency:true, latencySeconds:.6, cameraZoomLimit:20, cameraFocusY:{...DEFAULT_CAMERA_FOCUS_Y}, gtLosSourceHeight:2.0, targetCalibrationRevision:1, bgmEnabled:true, sfxEnabled:true, bgmVolume:.025, sfxVolume:.025, skillSfxTiming:JSON.parse(JSON.stringify(DEFAULT_SKILL_SFX_TIMING)), skillActionLock:{...DEFAULT_SKILL_ACTION_LOCK}, moveSpeed:{chaser:12.0,justice:8.0,oppressor:5.0}, mapType:'gorge', dummyMotion:{mode:'regular',speed:7.8,running:false}};
   Object.assign(DEFAULT_SETTINGS,{nearbyNpcLabels:true,oppressorLimit:{home:1,enemy:1},chaserLimit:{home:2,enemy:2},justiceLimit:{home:-1,enemy:-1},vehicleTotalLimit:{home:3,enemy:3}});
   const GAME={mode:'menu',phase:'menu',screen:'menu',roster:Array.from({length:12},(_,i)=>['warrior','summoner','dragoon'][i%3]),elapsed:0,homeSpawn:0,enemySpawn:0,awaitMount:false};
   let centralBoundary=null;
@@ -677,13 +676,18 @@
     for(const team of ['home','enemy'])settings[key][team]=THREE.MathUtils.clamp(Math.trunc(Number(settings[key][team])||0),key==='justiceLimit'?-1:0,12);
   }
   try{const saved=JSON.parse(localStorage.getItem('hgTrainerSettings')||'null');if(saved){
-    if(saved.tiltRevision!==1&&Number.isFinite(saved.cameraTilt))settings.cameraTilt=THREE.MathUtils.clamp(saved.cameraTilt+20,0,100);
     if(saved.cameraRevision===1&&Number.isFinite(saved.cameraFovRad))settings.cameraFovRad=THREE.MathUtils.clamp(2*Math.atan(Math.tan(saved.cameraFovRad/2)*16/6),.69,.78);
     if(typeof saved.emulateLatency==='boolean')settings.emulateLatency=saved.emulateLatency;
     if(Number.isFinite(saved.latencySeconds))settings.latencySeconds=saved.cameraRevision!==2&&saved.latencySeconds===.2?.6:THREE.MathUtils.clamp(saved.latencySeconds,0,1);
-    if(Number.isFinite(saved.cameraZoomLimit))settings.cameraZoomLimit=saved.cameraRevision===1&&saved.cameraZoomLimit===30?20:THREE.MathUtils.clamp(saved.cameraZoomLimit,6,60);
+    settings.cameraZoomLimit=20;
     if(saved.cameraRevision!==2&&settings.skillSfxTiming.justice[0]===.62)settings.skillSfxTiming.justice[0]=.6;
   }}catch(_){}
+  // Migrate previous defaults once, preserving individually adjusted camera heights.
+  try{const saved=JSON.parse(localStorage.getItem('hgTrainerSettings')||'null');if(saved&&saved.targetCalibrationRevision!==1){
+    for(const [type,old] of Object.entries({chaser:13,justice:15,oppressor:13}))if(settings.cameraFocusY[type]===old)settings.cameraFocusY[type]=DEFAULT_CAMERA_FOCUS_Y[type];
+    if(settings.gtLosSourceHeight===3)settings.gtLosSourceHeight=2;
+  }}catch(_){}
+  function groundSkillRange(skill,type=robotState.type){return skill.maxRange+(ROBOT_TARGET_RADIUS_BY_TYPE[type]||0);}
   function normalizeMoveSpeeds(){
     const gap=.1;
     let o=THREE.MathUtils.clamp(Number(settings.moveSpeed.oppressor)||5.0,2,14.8);
@@ -1709,7 +1713,12 @@
   function buildRobotVisual(type){
     if(robotVisual){robot.remove(robotVisual);disposeV2(robotVisual);}
     robotVisual=makeRobotModel(type,'home');robot.add(robotVisual);
-    const ring=targetCircle(ROBOT_SELF_TARGET_RADIUS,'home');ring.scale.setScalar(1/ROBOT_VISUAL_SCALE);ring.position.y/=ROBOT_VISUAL_SCALE*2/3*4/5;robotVisual.add(ring);
+    const ring=targetCircle(ROBOT_TARGET_RADIUS_BY_TYPE[type],'home');ring.scale.setScalar(1/ROBOT_VISUAL_SCALE);ring.position.y/=ROBOT_VISUAL_SCALE*2/3*4/5;robotVisual.add(ring);
+  }
+  function refreshTargetCircle(d){
+    const ring=d.root.children.find(child=>child.geometry?.type==='RingGeometry');
+    if(ring){d.root.remove(ring);disposeV2(ring);}
+    d.root.add(targetCircle(d.targetCircleRadius||d.radius,d.team));
   }
   function targetCircle(radius,team){
     const ring=new THREE.Mesh(new THREE.RingGeometry(Math.max(.05,radius-.16),radius,64),new THREE.MeshBasicMaterial({color:team==='home'?0x5dd6ff:0xe45b5b,transparent:true,opacity:.4,side:THREE.DoubleSide,depthWrite:false}));
@@ -1825,6 +1834,7 @@
   const GAMEPAD_L1=4, GAMEPAD_R1=5, GAMEPAD_L2=6, GAMEPAD_R2=7;
   const GAMEPAD_CONFIRM=0, GAMEPAD_CANCEL=1, GAMEPAD_JUMP=3;
   const GAMEPAD_MOVE_DEADZONE=.16, GAMEPAD_CAMERA_DEADZONE=.12;
+  let gamepadZoomRemainder=0;
   const GAMEPAD_YAW_SPEED=2.35, GAMEPAD_PITCH_SPEED=1.85, GAMEPAD_ZOOM_SPEED=12.0;
   const gamepadInput={index:null,connected:false,moveX:0,moveY:0,prevButtons:[],name:''};
   let lastMouseInputAt=-Infinity,lastGamepadInputAt=-Infinity;
@@ -1900,7 +1910,13 @@
     // FF14公式操作に合わせ、L1/LB中は右スティック上下をZoomへ回す。左右Yawは維持。
     if(Math.abs(look.x)>.001)cameraYaw=wrapAngle(cameraYaw-look.x*GAMEPAD_YAW_SPEED*dt);
     if(l1){
-      if(Math.abs(look.y)>.001)cameraDist=THREE.MathUtils.clamp(cameraDist+look.y*GAMEPAD_ZOOM_SPEED*dt,CAMERA_ZOOM_MIN,cameraZoomLimit());
+      if(Math.abs(look.y)>.001){
+        if(Math.sign(gamepadZoomRemainder)!==Math.sign(look.y))gamepadZoomRemainder=0;
+        gamepadZoomRemainder+=look.y*GAMEPAD_ZOOM_SPEED*dt;
+        const steps=Math.trunc(gamepadZoomRemainder/.75);
+        cameraDist=THREE.MathUtils.clamp(cameraDist+steps*.75,CAMERA_ZOOM_MIN,CAMERA_ZOOM_MAX);
+        gamepadZoomRemainder-=steps*.75;
+      }else gamepadZoomRemainder=0;
     }else if(Math.abs(look.y)>.001){
       cameraPitch=THREE.MathUtils.clamp(cameraPitch-look.y*GAMEPAD_PITCH_SPEED*dt,THREE.MathUtils.degToRad(CAMERA_PITCH_MIN_DEG),THREE.MathUtils.degToRad(CAMERA_PITCH_MAX_DEG));
     }
@@ -2092,7 +2108,7 @@
     const horizontalDistance=Math.hypot(dx,dz);
     const verticalDelta=point.y-currentGroundHeight();
     const surfaceValid=!!info?.walkable && !info?.blocked;
-    const inRange=horizontalDistance<=skill.maxRange+GT_RANGE_EPSILON;
+    const inRange=horizontalDistance<=groundSkillRange(skill)+GT_RANGE_EPSILON;
     const losClear=surfaceValid?groundTargetLosClear(point):false;
     const valid=surfaceValid&&inRange&&losClear;
     let reason='';
@@ -2115,7 +2131,7 @@
     const rawPoint=point.clone();
     const rawDx=rawPoint.x-robot.position.x,rawDz=rawPoint.z-robot.position.z;
     const rawHorizontalDistance=Math.hypot(rawDx,rawDz);
-    const maxRange=activeGround.skill.maxRange;
+    const maxRange=groundSkillRange(activeGround.skill);
 
     // 「GTアクションの有効範囲内のみ操作可能にする」はFFXIVの射程leashだけを再現する。
     // 遮蔽・高低差・配置不可はクランプ条件にしない。水平距離が最大射程を超えた時だけ同方向の射程端へ移す。
@@ -2135,7 +2151,7 @@
     const stateText=evaluation.reason?`（${evaluation.reason}）`:clamped?'（射程端）':'（有効）';
     const heightText=Math.abs(evaluation.verticalDelta)>=.05?` / 高低差 ${evaluation.verticalDelta>=0?'+':''}${evaluation.verticalDelta.toFixed(1)}m`:'';
     const recast=onCooldown(activeGround.index);
-    $('#statusLine').textContent=`GT: ${activeGround.skill.name} / 水平 ${evaluation.horizontalDistance.toFixed(1)}m / 最大 ${maxRange}m${heightText} ${stateText}${recast>0?` / Re ${recast.toFixed(1)}s`:''}`;
+    $('#statusLine').textContent=`GT: ${activeGround.skill.name} / 水平 ${evaluation.horizontalDistance.toFixed(1)}m / 最大 ${activeGround.skill.maxRange}m${heightText} ${stateText}${recast>0?` / Re ${recast.toFixed(1)}s`:''}`;
   }
 
   function confirmGround(){
@@ -2350,10 +2366,8 @@
       const realEdgeDist=Math.max(0,centerDist-groundTargetRadius);
       const r=skill.falloffRadius||skill.radius;
       if(skill.falloff){
-        // 超大型ミサイルの減衰基準はGT着弾サークルから1m内側。
-        // 構造物では 4.63→3.63m / 10.09→9.09m となり、本体最外周と一致する。
-        const inset=Math.max(0,Number(skill.falloffTargetInset)||0);
-        const virtualRadius=Math.max(0,groundTargetRadius-inset);
+        // 命中と距離減衰は同じターゲットサークル外周を基準にする。
+        const virtualRadius=groundTargetRadius;
         const falloffDistance=Math.max(0,centerDist-virtualRadius);
         return {hit:realEdgeDist<=r,distance:realEdgeDist,falloffDistance,centerDistance:centerDist,targetRadius:groundTargetRadius,virtualRadius};
       }
@@ -3053,27 +3067,27 @@
   // 衝突押し込みは基本位置計算から独立。現段階では押し込みなし。
   function resolveCameraCollision(lookAt,desiredPosition){ return desiredPosition; }
   function tiltOffsetFromSetting(value){
-    // ver5.0: 新100は旧80、新0は旧-20。1段階の補正量は維持。
+    // FF14実測: TiltOffset (rad) = -0.08 + 0.0029 * Tilt。
     const v=THREE.MathUtils.clamp(value,0,100);
-    return 0.210-(120-v)*0.0058;
+    return -0.08+0.0029*v;
   }
-  // 暫定TiltCamera: ワールド座標/Pitch/Zoomは変更せず、射影中心だけ上下補正する。
-  function applyTiltScreenOffset(value){
-    camera.updateProjectionMatrix();
-    camera.projectionMatrix.elements[9]=tiltOffsetFromSetting(value);
-    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
-  }
+
+
   function updateCamera(){
     cameraYaw=wrapAngle(cameraYaw);
-    cameraPitch=THREE.MathUtils.clamp(cameraPitch,THREE.MathUtils.degToRad(CAMERA_PITCH_MIN_DEG),THREE.MathUtils.degToRad(CAMERA_PITCH_MAX_DEG));
-    cameraDist=THREE.MathUtils.clamp(cameraDist,CAMERA_ZOOM_MIN,cameraZoomLimit());
-    const focusY=settings.cameraFocusY?.[robotState.type]??DEFAULT_CAMERA_FOCUS_Y[robotState.type]??PLAYER_CAMERA_OFFSET_Y_REFERENCE;
-    const lookAt=robot.position.clone().add(new THREE.Vector3(0,focusY,0));
-    const desiredPosition=calculateCameraPosition(lookAt,cameraYaw+(keys.KeyV&&pcCanAct()?Math.PI:0),cameraPitch,cameraDist);
-    camera.position.copy(resolveCameraCollision(lookAt,desiredPosition));
-    camera.lookAt(lookAt);
-    camera.fov=THREE.MathUtils.radToDeg(THREE.MathUtils.clamp(settings.cameraFovRad,CAMERA_FOV_MIN_RAD,CAMERA_FOV_MAX_RAD));
-    applyTiltScreenOffset(settings.cameraTilt);
+    const minPitch=THREE.MathUtils.degToRad(CAMERA_PITCH_MIN_DEG),maxPitch=THREE.MathUtils.degToRad(CAMERA_PITCH_MAX_DEG);
+    cameraPitch=THREE.MathUtils.clamp(cameraPitch,minPitch,maxPitch); // DirV
+    cameraDist=THREE.MathUtils.clamp(cameraDist,CAMERA_ZOOM_MIN,CAMERA_ZOOM_MAX);
+    const cameraOffset=new THREE.Vector3(0,settings.cameraFocusY?.[robotState.type]??DEFAULT_CAMERA_FOCUS_Y[robotState.type]??PLAYER_CAMERA_OFFSET_Y_REFERENCE,0);
+    const pivot=robot.position.clone().add(cameraOffset);
+    const yaw=cameraYaw+(keys.KeyV&&pcCanAct()?Math.PI:0);
+    camera.position.copy(calculateCameraPosition(pivot,yaw,cameraPitch,cameraDist));
+    const viewPitch=THREE.MathUtils.clamp(cameraPitch+tiltOffsetFromSetting(settings.cameraTilt),minPitch,maxPitch);
+    const viewDirection=new THREE.Vector3(-Math.sin(yaw)*Math.cos(viewPitch),Math.sin(viewPitch),-Math.cos(yaw)*Math.cos(viewPitch));
+    camera.lookAt(camera.position.clone().add(viewDirection));
+    const fovRad=cameraDist===CAMERA_ZOOM_MAX?CAMERA_FOV_DEFAULT_RAD:THREE.MathUtils.clamp(settings.cameraFovRad,CAMERA_FOV_MIN_RAD,CAMERA_FOV_MAX_RAD);
+    camera.fov=THREE.MathUtils.radToDeg(fovRad);
+    camera.updateProjectionMatrix();
   }
   function updateCoordinateDebug(){
     const el=$('#coordText'); if(!el)return;
@@ -3098,7 +3112,7 @@
     try{canvas.releasePointerCapture(e.pointerId);}catch(_){}
   });
   canvas.addEventListener('contextmenu',e=>e.preventDefault());
-  canvas.addEventListener('wheel',e=>{cameraDist=THREE.MathUtils.clamp(cameraDist+Math.sign(e.deltaY)*.5,CAMERA_ZOOM_MIN,cameraZoomLimit());},{passive:true});
+  canvas.addEventListener('wheel',e=>{cameraDist=THREE.MathUtils.clamp(cameraDist+Math.sign(e.deltaY)*.75,CAMERA_ZOOM_MIN,cameraZoomLimit());},{passive:true});
 
   addEventListener('keydown',e=>{
     if(['KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','KeyV','Space'].includes(e.code))e.preventDefault(); keys[e.code]=true;
@@ -3681,9 +3695,10 @@
     addTeamCE(d.team,-50);d.pilot={name:d.name,id:d.id,kind:d.kind,type:d.type,maxHp:d.maxHp,radius:d.radius};
     const visual=d.root.children[0];d.root.remove(visual);disposeV2(visual);d.root.add(makeRobotModel(type,d.team));
     Object.assign(d,{type:'robot',robotType:type,radius:type==='justice'?DUMMY_SPECS.robotJustice.radius:type==='chaser'?DUMMY_SPECS.robotChaser.radius:DUMMY_SPECS.robotOppressor.radius,name:(d.team==='home'?'味方':'敵')+' '+ROBOTS[type].name,maxHp:ROBOTS[type].hp,hp:ROBOTS[type].hp,boardingOrder:null,tankOrder:null,mercOrder:null,transfer:null,elixirCast:null,retreating:false,sprinting:false,burn:null,knock:null,statusUntil:0,lightBarrier:0,lightUntil:0,jumpVisualUntil:0,target:null,detour:null,positionGoal:null});
+    refreshTargetCircle(d);
     d.coreRush=null;d.vehicleDirective=null;d.encounterTarget=null;d.encounterThinkAt=0;d.mountedNav=null;d.navFailedGoal=null;d.navRetryAt=0;d.unreachableTargets=null;d.oppressor={skillAt:[0,0,0],thinkAt:0,ep:MAX_EP,missileAt:0,steamAt:0,refillAt:0,lockAt:0,cast:null};d.label.querySelector('.n').textContent=d.name;d.pathIndex=npcNearestPath(d);d.statusText=ROBOTS[type].name+'出撃';d.lastMovedAt=laneBattle.time;d.motionAnchor=d.root.position.clone();if(flying){GAME.flightCredits--;d.flyingOppressor=true;d.flight=null;d.name='敵 空飛ぶオプレッサー';d.label.querySelector('.n').textContent=d.name;addOppressorWings(d);}if(type==='justice'){d.defenseThinkAt=0;d.defenseAnchor=d.root.position.clone();d.defenseTarget=justiceDefenseTarget(d);d.defending=!!d.defenseTarget;}const order=vehicleOrder(d.team);if(order&&order.type===type){d.vehicleDirective=order.kind;if(d.lane!==order.lane)commandTransfer(d,order.lane);}return true;
   }
-  function restoreOppressorPilot(d){d.flyingOppressor=false;d.flight=null;if(!d.pilot)return;const visual=d.root.children[0];d.root.remove(visual);disposeV2(visual);d.root.add(d.job==='warrior'?makeWarrior(d.team):d.job==='summoner'?makeSummoner(d.team):makeDragoon(d.team));Object.assign(d,d.pilot);d.pilot=null;d.oppressor=null;d.robotType=null;d.label.querySelector('.n').textContent=d.name;}
+  function restoreOppressorPilot(d){d.flyingOppressor=false;d.flight=null;if(!d.pilot)return;const visual=d.root.children[0];d.root.remove(visual);disposeV2(visual);d.root.add(d.job==='warrior'?makeWarrior(d.team):d.job==='summoner'?makeSummoner(d.team):makeDragoon(d.team));Object.assign(d,d.pilot);refreshTargetCircle(d);d.pilot=null;d.oppressor=null;d.robotType=null;d.label.querySelector('.n').textContent=d.name;}
   function updateOppressorOrders(now){
     applyVehicleOrders();for(const d of dummies)if(d.boardingOrder){const type=d.boardingOrder.type||'oppressor';if(!d.alive||TEAM_CE[d.team]<50||vehicleCount(d.team,type)>=vehicleLimit(d.team,type)||vehicleCount(d.team)>=settings.vehicleTotalLimit[d.team]){d.boardingOrder=null;d.pathIndex=npcNearestPath(d);}}
     if(laneBattle.time<OPPRESSOR_CONTROL.next)return;OPPRESSOR_CONTROL.next=laneBattle.time+5;
@@ -3763,7 +3778,7 @@
     if(!coreDefenseTarget(d)&&d.transfer&&moveChaserTransfer(d,dt,now))return;
     if(o.ep<missile.ep&&TEAM_CE[d.team]>=refill.ce&&t>=o.refillAt){addTeamCE(d.team,-refill.ce);o.ep=Math.min(MAX_EP,o.ep+5000);o.refillAt=t+refill.cd;d.statusText='青燐水補充・EP回復';void 0;}
     const enemy=d.team==='home'?'enemy':'home',tower=battleStructure(enemy,d.lane),defense=coreDefenseTarget(d),goal=defense||(d.flyingOppressor?d.flight.target:tower?.alive?tower:battleStructure(enemy,d.lane,true));d.target=goal;if(!goal?.alive){d.statusText='目標破壊完了';return;}
-    const distance=Math.hypot(d.root.position.x-goal.root.position.x,d.root.position.z-goal.root.position.z),canFire=distance<=missile.maxRange&&groundTargetLosClear(goal.root.position,d.root.position);
+    const distance=Math.hypot(d.root.position.x-goal.root.position.x,d.root.position.z-goal.root.position.z),canFire=distance<=groundSkillRange(missile,d.robotType)&&groundTargetLosClear(goal.root.position,d.root.position);
     if(canFire&&t>=o.missileAt&&o.ep>=missile.ep){d.root.rotation.y=Math.atan2(goal.root.position.x-d.root.position.x,goal.root.position.z-d.root.position.z);o.cast={origin:d.root.position.clone(),point:goal.root.position.clone(),ends:t+missile.cast};d.statusText='超大型ミサイル 2.5秒';void 0;return;}
     if(!defense&&o.ep>=steam.ep&&t>=o.steamAt&&dummies.some(v=>v.npc&&v.alive&&v.team!==d.team&&v.type==='player'&&d.root.position.distanceTo(v.root.position)<=steam.radius+v.radius)){
       o.ep-=steam.ep;o.steamAt=t+steam.cd;o.lockAt=t+skillActionLock(steam);resolveSkill({skill:steam,index:0,origin:d.root.position.clone(),facing:d.root.rotation.y,sourceTeam:d.team,source:d});d.statusText='蒸気噴射';return;
@@ -3791,12 +3806,12 @@
     if(t>=(d.defenseThinkAt||0)||!d.defenseTarget?.alive){d.defenseThinkAt=t+.5;d.defenseTarget=justiceDefenseTarget(d);}
     const target=d.defenseTarget;if(!target){d.defending=false;d.target=null;d.mountedNav=null;d.pathIndex=npcNearestPath(d);return false;}
     d.target=target;const distance=d.root.position.distanceTo(target.root.position);
-    for(const i of [2,1,0]){const skill=ROBOTS.justice.skills[i];if(t>=o.skillAt[i]&&o.ep>=skill.ep&&distance<=(skill.range||skill.maxRange)&&npcSight(d,target)){justiceStart(d,i,target,now);return true;}}
+    for(const i of [2,1,0]){const skill=ROBOTS.justice.skills[i];if(t>=o.skillAt[i]&&o.ep>=skill.ep&&distance<=(skill.range||groundSkillRange(skill,d.robotType))&&npcSight(d,target)){justiceStart(d,i,target,now);return true;}}
     if(distance>28||!npcSight(d,target)){const before=d.root.position.clone();npcApproach(d,target.root.position,dt,moveSpeed('justice'));const moved=d.root.position.distanceToSquared(before)>.0009;animateNpcOppressor(d,now,moved);if(moved){d.lastMovedAt=t;d.motionAnchor=d.root.position.clone();}else if(t-(d.lastMovedAt??t)>30)checkNpcStationary(d);}else{d.lastMovedAt=t;animateNpcOppressor(d,now,false);}
     d.statusText='拠点防衛・敵大型兵器を迎撃';return true;
   }
   function justiceSiegeTarget(d){
-    return dummies.filter(v=>v.alive&&v.battleStructure&&v.team!==d.team&&(!v.core||['North','South'].some(lane=>!battleStructure(v.team,lane)?.alive))&&Math.hypot(v.root.position.x-d.root.position.x,v.root.position.z-d.root.position.z)<=ROBOTS.justice.skills[0].maxRange&&groundTargetLosClear(v.root.position,d.root.position)).sort((a,b)=>Number(a.core)-Number(b.core)||a.root.position.distanceToSquared(d.root.position)-b.root.position.distanceToSquared(d.root.position))[0]||null;
+    return dummies.filter(v=>v.alive&&v.battleStructure&&v.team!==d.team&&(!v.core||['North','South'].some(lane=>!battleStructure(v.team,lane)?.alive))&&Math.hypot(v.root.position.x-d.root.position.x,v.root.position.z-d.root.position.z)<=groundSkillRange(ROBOTS.justice.skills[0],d.robotType)&&groundTargetLosClear(v.root.position,d.root.position)).sort((a,b)=>Number(a.core)-Number(b.core)||a.root.position.distanceToSquared(d.root.position)-b.root.position.distanceToSquared(d.root.position))[0]||null;
   }
   function updateJusticeEncounter(d,dt,now){
     const o=d.oppressor,t=laneBattle.time;
@@ -3805,7 +3820,7 @@
       d.encounterTarget=pool.filter(v=>{const blocked=d.unreachableTargets?.get(v);return !(blocked&&blocked.until>t&&blocked.point.distanceTo(v.root.position)<8)&&d.root.position.distanceTo(v.root.position)<=(v===d.encounterTarget?85:70)&&npcSight(d,v);}).sort((a,b)=>d.root.position.distanceToSquared(a.root.position)-d.root.position.distanceToSquared(b.root.position))[0]||null;
     }
     const target=d.encounterTarget;if(!target)return false;d.target=target;const distance=d.root.position.distanceTo(target.root.position);
-    for(const i of [2,1,0]){const a=ROBOTS.justice.skills[i];if(t>=o.skillAt[i]&&o.ep>=a.ep&&distance<=(a.range||a.maxRange)&&npcSight(d,target)){justiceStart(d,i,target,now);return true;}}
+    for(const i of [2,1,0]){const a=ROBOTS.justice.skills[i];if(t>=o.skillAt[i]&&o.ep>=a.ep&&distance<=(a.range||groundSkillRange(a,d.robotType))&&npcSight(d,target)){justiceStart(d,i,target,now);return true;}}
     if(distance>28){const before=d.root.position.clone();npcApproach(d,target.root.position,dt,moveSpeed('justice'));const moved=d.root.position.distanceToSquared(before)>.0009;animateNpcOppressor(d,now,moved);if(moved){d.lastMovedAt=t;d.motionAnchor=d.root.position.clone();}else if(t-(d.lastMovedAt??t)>30)checkNpcStationary(d);}else d.lastMovedAt=t;
     d.statusText='進軍路の敵機を排除';return true;
   }
@@ -3822,7 +3837,7 @@
     const refill=skills[3];if(o.ep<1000&&TEAM_CE[d.team]>=refill.ce&&t>=o.refillAt){addTeamCE(d.team,-refill.ce);o.ep=Math.min(MAX_EP,o.ep+5000);o.refillAt=t+refill.cd;void 0;}
     if(rush){
       const skill=skills[0],distance=Math.hypot(d.root.position.x-rush.root.position.x,d.root.position.z-rush.root.position.z);
-      if(distance<=skill.maxRange&&groundTargetLosClear(rush.root.position,d.root.position)){
+      if(distance<=groundSkillRange(skill,d.robotType)&&groundTargetLosClear(rush.root.position,d.root.position)){
         if(t>=o.skillAt[0]&&o.ep>=skill.ep)justiceStart(d,0,rush,now);
         else d.statusText='コア集中攻撃・パンチ再使用待機';
         d.lastMovedAt=t;animateNpcOppressor(d,now,false);
@@ -3831,12 +3846,12 @@
     }
     if(coreDefenseTarget(d)){d.defending=true;d.defenseThinkAt=0;if(updateJusticeDefense(d,dt,now))return;}
     const enemy=d.team==='home'?'enemy':'home',tower=battleStructure(enemy,d.lane),goal=justiceSiegeTarget(d)||(tower?.alive?tower:battleStructure(enemy,d.lane,true));d.target=goal;if(!goal?.alive){d.statusText='目標破壊完了';return;}
-    const range=Math.hypot(d.root.position.x-goal.root.position.x,d.root.position.z-goal.root.position.z),canPunch=range<=skills[0].maxRange&&groundTargetLosClear(goal.root.position,d.root.position);
+    const range=Math.hypot(d.root.position.x-goal.root.position.x,d.root.position.z-goal.root.position.z),canPunch=range<=groundSkillRange(skills[0],d.robotType)&&groundTargetLosClear(goal.root.position,d.root.position);
     if(canPunch&&t>=o.skillAt[0]&&o.ep>=skills[0].ep){justiceStart(d,0,goal,now);return;}
     if(canPunch){d.statusText=o.ep<skills[0].ep?'EP不足・青燐水待機':'攻城優先・パンチ再使用待機';d.lastMovedAt=t;animateNpcOppressor(d,now,false);return;}
     if(updateJusticeDefense(d,dt,now)||updateJusticeEncounter(d,dt,now))return;
     if(t>=o.thinkAt||!o.infantry?.alive){o.thinkAt=t+.5;o.infantry=null;let closest=70;for(const v of dummies){if(!v.npc||v.type!=='player'||!v.alive||v.team!==enemy)continue;const distance=d.root.position.distanceTo(v.root.position);if(distance<closest&&npcSight(d,v)){closest=distance;o.infantry=v;}}}
-    const foe=o.infantry;if(foe?.alive){const distance=d.root.position.distanceTo(foe.root.position);for(const i of [1,2,0]){const a=skills[i];if(t>=o.skillAt[i]&&o.ep>=a.ep&&distance<=(a.range||a.maxRange)&&npcSight(d,foe)){justiceStart(d,i,foe,now);return;}}}
+    const foe=o.infantry;if(foe?.alive){const distance=d.root.position.distanceTo(foe.root.position);for(const i of [1,2,0]){const a=skills[i];if(t>=o.skillAt[i]&&o.ep>=a.ep&&distance<=(a.range||groundSkillRange(a,d.robotType))&&npcSight(d,foe)){justiceStart(d,i,foe,now);return;}}}
     const limit=tower?.alive?d.goalIndex:d.path.length-1;let point=d.path[Math.min(d.pathIndex,limit)];if(d.root.position.distanceTo(point)<.3&&d.pathIndex<limit)point=d.path[++d.pathIndex];const before=d.root.position.clone();npcApproach(d,point,dt,moveSpeed('justice'));const moved=d.root.position.distanceToSquared(before)>.0009;animateNpcOppressor(d,now,moved);d.statusText='ジャスティス進軍・攻城';if(moved){d.lastMovedAt=t;d.motionAnchor=d.root.position.clone();}else if(t-(d.lastMovedAt??t)>30)checkNpcStationary(d);
   }
   const CORE_THREAT_CACHE={frame:null,length:0,pool:null};
@@ -3891,7 +3906,7 @@
   }
   function chaserTarget(d){const defense=coreDefenseTarget(d);if(defense)return defense;
     const pool=dummies.filter(v=>v.alive&&!v.ninjaHidden&&v.team!==d.team&&v.team!=='neutral'&&(v.type==='robot'||v.npc||v.laneUnit));
-    if(d.team==='enemy'&&robotState.hp>0){d.pcThreat??={root:robot,type:'robot',team:'home',radius:DUMMY_SPECS.robotChaser.radius};Object.assign(d.pcThreat,{alive:true,robotType:robotState.type});pool.push(d.pcThreat);}
+    if(d.team==='enemy'&&robotState.hp>0){d.pcThreat??={root:robot,type:'robot',team:'home',get radius(){return ROBOT_TARGET_RADIUS_BY_TYPE[robotState.type];}};Object.assign(d.pcThreat,{alive:true,robotType:robotState.type});pool.push(d.pcThreat);}
     let best=null,score=-Infinity;
     for(const v of pool){if(vehicleOrderLane(d)&&chaserTargetLane(v)!==vehicleOrderLane(d))continue;const blocked=d.unreachableTargets?.get(v);if(blocked&&blocked.until>laneBattle.time&&blocked.point.distanceTo(v.root.position)<8)continue;const dist=d.root.position.distanceTo(v.root.position);const strategic=v.type==='robot'&&['justice','oppressor'].includes(v.robotType);if(!strategic&&(dist>90||Math.abs(v.root.position.y-d.root.position.y)>12))continue;
       const kind=v.robotType|| (v.id==='robotJustice'?'justice':v.id==='robotOppressor'?'oppressor':'chaser');
@@ -3914,7 +3929,7 @@
     const o=d.oppressor,t=laneBattle.time,r=d.root.position.distanceTo(target.root.position),skills=ROBOTS.chaser.skills;
     const order=target.type==='robot'?[0,1,2]:[1,2,0];
     for(const i of order){const a=skills[i];if(t<o.skillAt[i]||o.ep<a.ep)continue;
-      if(i===2?r<=a.maxRange&&groundTargetLosClear(target.root.position,d.root.position):r<=a.range&&npcSight(d,target))return i;}
+      if(i===2?r<=groundSkillRange(a,d.robotType)&&groundTargetLosClear(target.root.position,d.root.position):r<=a.range&&npcSight(d,target))return i;}
     return -1;
   }
   function fireNpcChaser(d,cast,now){const o=d.oppressor,skill=ROBOTS.chaser.skills[cast.index];o.ep-=skill.ep;o.skillAt[cast.index]=laneBattle.time+skill.cd;o.lockAt=laneBattle.time+skillActionLock(skill);
@@ -4037,7 +4052,7 @@
   function revealNinja(d){if(!d?.ninjaHidden)return;d.ninjaHidden=false;if(d.root.children[0])d.root.children[0].visible=true;}
   function hideNinja(d,now){if(d.job!=='ninja'||!d.alive||d.ninjaHidden||d.ninjaCast||d.statusUntil>now||d.knock||laneBattle.time<d.lockAt||laneBattle.time<(d.hideAt||0))return false;d.ninjaHidden=true;d.hideAt=laneBattle.time+30;npcEndSprint(d);if(d.team==='enemy')d.root.children[0].visible=false;d.statusText='かくれる';for(const other of dummies)if(other.team!==d.team&&other.target===d){other.target=null;other.thinkAt=0;}return true;}
   function ninjaRobot(d,t){return !!t?.alive&&t.team!==d.team&&(t.oppressor||t.pc||t.type==='robot'||/^robot/.test(t.kind||''));}
-  function ninjaTarget(d){const defense=coreDefenseTarget(d);if(defense)return defense;const pool=dummies.filter(t=>ninjaRobot(d,t));if(d.team==='enemy'&&robotState.hp>0&&!GAME.awaitMount){d.ninjaPc??={pc:true,root:robot,team:'home',type:'robot',radius:ROBOT_SELF_TARGET_RADIUS,get alive(){return robotState.hp>0;},get robotType(){return robotState.type;},get hp(){return robotState.hp;}};pool.push(d.ninjaPc);}
+  function ninjaTarget(d){const defense=coreDefenseTarget(d);if(defense)return defense;const pool=dummies.filter(t=>ninjaRobot(d,t));if(d.team==='enemy'&&robotState.hp>0&&!GAME.awaitMount){d.ninjaPc??={pc:true,root:robot,team:'home',type:'robot',get radius(){return ROBOT_TARGET_RADIUS_BY_TYPE[robotState.type];},get alive(){return robotState.hp>0;},get robotType(){return robotState.type;},get hp(){return robotState.hp;}};pool.push(d.ninjaPc);}
     const rank=t=>({justice:3,oppressor:2,chaser:1}[t.robotType||({robotJustice:'justice',robotOppressor:'oppressor',robotChaser:'chaser'}[t.kind])]||1),distance=t=>d.root.position.distanceTo(t.root.position);pool.sort((a,b)=>rank(b)-rank(a)||distance(a)-distance(b));let best=pool[0]||null;
     if(ninjaRobot(d,d.target)&&best&&best!==d.target&&distance(best)>distance(d.target)+60)return d.target;return best;
   }
@@ -4098,7 +4113,7 @@
     const p=laneBattle.routes[entry.lane].points[0],job=['summoner','warrior','ninja'].includes(entry.job)?entry.job:'dragoon',jobName=job==='ninja'?'忍者':job==='summoner'?'召喚士':job==='warrior'?'戦士':'竜騎士';
     const d=createDummy('player',p,{team:entry.team,maxHpOverride:job==='warrior'?80000:job==='summoner'?50000:60000,nameOverride:(entry.team==='home'?'味方':'敵')+' '+jobName+' '+entry.id,groundYOverride:p.y});
     scene.remove(d.root);disposeV2(d.root);d.root=new THREE.Group();d.root.add(job==='ninja'?makeNinja(entry.team):job==='warrior'?makeWarrior(entry.team):job==='summoner'?makeSummoner(entry.team):makeDragoon(entry.team));scene.add(d.root);
-    Object.assign(d,{npc:true,job,rosterId:entry.id,lane:entry.lane});d.label.classList.toggle('friendly',entry.team==='home');npcSpawn(d);return d;
+    refreshTargetCircle(d);Object.assign(d,{npc:true,job,rosterId:entry.id,lane:entry.lane});d.label.classList.toggle('friendly',entry.team==='home');npcSpawn(d);return d;
   }
   function addNpc(team,lane='North',job='dragoon'){
     if(npcRoster.filter(x=>x.team===team).length>=24){showToast('NPCは各軍24人までです');return null;}
@@ -4669,7 +4684,7 @@
     }
   }
   function gamePc(){
-    return GAME.pc??={uid:'controlled-pc',pc:true,type:'robot',team:'home',root:robot,radius:ROBOT_SELF_TARGET_RADIUS,get alive(){return robotState.hp>0&&!GAME.awaitMount&&(GAME.mode==='simulation'||GAME.mode==='game'&&GAME.phase==='running');},get hp(){return robotState.hp;},get maxHp(){return ROBOTS[robotState.type].hp;},get robotType(){return robotState.type;}};
+    return GAME.pc??={uid:'controlled-pc',pc:true,type:'robot',team:'home',root:robot,get radius(){return ROBOT_TARGET_RADIUS_BY_TYPE[robotState.type];},get alive(){return robotState.hp>0&&!GAME.awaitMount&&(GAME.mode==='simulation'||GAME.mode==='game'&&GAME.phase==='running');},get hp(){return robotState.hp;},get maxHp(){return ROBOTS[robotState.type].hp;},get robotType(){return robotState.type;}};
   }
   function finishGame(){
     if(GAME.phase!=='running')return;
@@ -4752,7 +4767,7 @@
   function updateDelayedJudgements(now){
     for(let i=0;i<delayedJudgements.length;){const event=delayedJudgements[i];if(now+1e-8>=event.at){delayedJudgements.splice(i,1);event.apply();}else i++;}
   }
-  function cameraZoomLimit(){return THREE.MathUtils.clamp(settings.cameraZoomLimit||20,6,60);}
+  function cameraZoomLimit(){return CAMERA_ZOOM_MAX;}
   function homeRespawnPosition(){
     const p=currentMapType==='gorge'?laneBattle.routes.North?.points[0]?.clone():new THREE.Vector3(0,0,-70);
     const spawn=p||new THREE.Vector3(MAP.westLaunch.x,0,MAP.westLaunch.z);
@@ -4782,7 +4797,7 @@
     battlefield.innerHTML='<summary>戦場の設定</summary>';
     for(const node of [...panel.children])if(!node.matches('h1,.subtitle'))(node===old?advanced:battlefield).append(node);
     battlefield.querySelector('#battleSettings').open=false;
-    grid.querySelector('#cameraFovSlider').closest('.settingRow').insertAdjacentHTML('beforebegin','<div class="settingRow"><span>カメラの引き上限</span><input id="cameraZoomLimit" type="range" min="6" max="60" step="0.5"><output id="cameraZoomLimitOut"></output></div>');
+    grid.querySelector('#cameraFovSlider').closest('.settingRow').insertAdjacentHTML('beforebegin','<div class="settingRow"><span>カメラの引き上限（固定）</span><input id="cameraZoomLimit" type="range" min="20" max="20" step="0.75" disabled><output id="cameraZoomLimitOut"></output></div>');
     const locks=[...grid.children].find(e=>e.classList.contains('sectionTitle')&&e.textContent==='発動後硬直（秒）');
     locks.insertAdjacentHTML('beforebegin','<div class="sectionTitle">スキル判定の遅延</div><div class="settingRow"><span>遅延を再現時の遅延</span><input id="latencySeconds" type="range" min="0" max="1" step="0.01"><output id="latencySecondsOut"></output></div>');
     for(const node of [...grid.children])if(node.classList.contains('sectionTitle')&&['環境','音声'].includes(node.textContent))node.remove();
@@ -4790,7 +4805,7 @@
     panel.append(battlefield,general,advanced);panel.classList.remove('collapsed');
     $('#emulateLatency').onchange=e=>{settings.emulateLatency=e.target.checked;saveSettings();};
     $('#latencySeconds').oninput=e=>{settings.latencySeconds=Number(e.target.value);saveSettings();updateRevisionSettingsUI();};
-    $('#cameraZoomLimit').oninput=e=>{settings.cameraZoomLimit=Number(e.target.value);cameraDist=Math.min(cameraDist,cameraZoomLimit());saveSettings();updateRevisionSettingsUI();};
+    $('#cameraZoomLimit').oninput=()=>{settings.cameraZoomLimit=cameraZoomLimit();cameraDist=Math.min(cameraDist,cameraZoomLimit());saveSettings();updateRevisionSettingsUI();};
     updateRevisionSettingsUI();
   }
   organizeSimulatorSettings();
