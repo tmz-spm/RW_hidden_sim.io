@@ -2982,11 +2982,10 @@
   function moveVelocityToward(target,maxDelta){const d=target.clone().sub(planarVelocity),len=d.length();if(len<=maxDelta||len<1e-8)planarVelocity.copy(target);else planarVelocity.addScaledVector(d,maxDelta/len);}
   function chooseReachableGround(candidates,from){
     if(!candidates?.length)return null;
-    let best=null,bestScore=Infinity;
+    let best=null;
     for(const c of candidates){
-      const rise=c.height-from.height;if(rise>WALK_STEP_HEIGHT+.02)continue;
-      const score=Math.abs(rise)+(c.surface===from.surface?-.24:0)+(c.ref===from.ref?-.35:0)+(c.synthetic?-.12:0)+(rise<-.9?.22:0);
-      if(score<bestScore){best=c;bestScore=score;}
+      if(c.height-from.height>WALK_STEP_HEIGHT+.02)continue;
+      if(!best||c.height>best.height+1e-6||Math.abs(c.height-best.height)<=1e-6&&best.synthetic&&!c.synthetic)best=c;
     }
     return best;
   }
